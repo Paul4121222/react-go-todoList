@@ -161,7 +161,7 @@ func main() {
 
 	
 	if env == "production" {
-		r.Static("/", "./client/dist");
+		r.Static("/static", "./client/dist");
 		r.NoRoute(func (c *gin.Context) {
 		c.File("./client/dist/index.html")
 	})
