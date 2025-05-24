@@ -4,14 +4,123 @@ import (
 	"fmt"
 	"github.com/joho/godotenv"
 	"os"
+	"log"
+)
+
+import (
+	"context"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type Todo struct {
-	ID int `json:"id"`
-	Completed bool `json:"completed"`
-	Message string `json:"body"`
+	ID primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	Completed bool `bson:"completed" json:"completed"`
+	Message string `bson:"body" json:"body"`
 }
 
+var collection *mongo.Collection;
+
+func handleGetTodos (c *gin.Context) {
+	var todos []Todo;
+	cursor, err := collection.Find(context.Background(), bson.M{});
+	if(err != nil) {
+		c.JSON(500, gin.H{
+				"error": err,
+		});
+		log.Fatal("搜尋失敗")
+	}
+
+	//應釋放資源
+	defer cursor.Close(context.Background());
+
+	for cursor.Next(context.Background()) {
+		var todo Todo;
+		if err := cursor.Decode(&todo); err != nil {
+			c.JSON(500, gin.H{
+				"error": err,
+			})
+		} else {
+			todos = append(todos, todo);
+		}
+	}
+	c.JSON(200, todos)
+}
+
+func handleAddTodo(c *gin.Context) {
+	todo := Todo{};
+	if err := c.ShouldBindJSON(&todo); err != nil {
+		c.JSON(500, gin.H{
+			"error": err,
+		});
+		return;
+	} 
+	if todo.Message == "" {
+		c.JSON(400, gin.H{
+			"error": "Body is Required",
+		})
+		return;
+	}	
+
+	result, err := collection.InsertOne(context.Background(), todo);
+	if err != nil {
+		c.JSON(500, gin.H{
+			"error": err,
+		});
+		return;
+	}
+
+ 	c.JSON(200, result);
+}	
+
+func handleUpdateTodo(c *gin.Context) {
+	 id := c.Param("id");
+	 objectID, err := primitive.ObjectIDFromHex(id);
+
+	 if (err != nil) {
+		c.JSON(400, gin.H{
+			"error": "ID is Invalid.",
+		})
+		return;
+	 }
+	 result, err := collection.UpdateOne(
+		context.Background(), 
+		bson.M{"_id": objectID},
+		bson.M{"$set": bson.M{"completed": true}},
+	);
+
+	if err != nil {
+		c.JSON(500, gin.H{
+			"error": err,
+		});
+		return;
+	}
+
+ 	c.JSON(200, result);
+}
+
+func handleDeleteTodo(c *gin.Context) {
+	id := c.Param("id");
+	objectID, err := primitive.ObjectIDFromHex(id);
+	if (err != nil) {
+		c.JSON(400, gin.H{
+			"error": "ID is Invalid.",
+		})
+		return;
+	 }
+
+	result, err := collection.DeleteOne(context.Background(), bson.M{"_id": objectID});
+	if err != nil {
+		c.JSON(500, gin.H{
+			"error": err,
+		});
+		return;
+	}
+
+ 	c.JSON(200, result);
+}
 func main() {
 	if err := godotenv.Load(); err != nil {
 		fmt.Println("Not load .env file.");
@@ -19,70 +128,27 @@ func main() {
 	}
 
 	port := os.Getenv("PORT");
+	mongodbURI := os.Getenv("MONGO_URI");
+	clientOptions := options.Client().ApplyURI(mongodbURI);
 
+	//跟mongoDB做連線(去問ip是否有效，比方說給的url無法做dns轉換就會發生err)，並返回客戶端的連線管理器
+	client, err := mongo.Connect(context.Background(), clientOptions);
+	if err != nil {
+		log.Fatal("無法初始化 Mongo 客戶端:", err);
+	}
+
+	if err := client.Ping(context.Background(), nil); err != nil {
+		log.Fatal("無法連線到 MongoDB:", err)
+	}
+
+	defer client.Disconnect(context.Background());
+	fmt.Println("成功連線到mongoDB");
+	collection = client.Database("go-react").Collection("todos");
 	r := gin.Default();
-	todoList := []Todo{};
+	r.GET("/api/todos", handleGetTodos);
+	r.POST("/api/todo", handleAddTodo);
+	r.PATCH("/api/todo/:id", handleUpdateTodo);
+	r.DELETE("/api/todo/:id", handleDeleteTodo);
 
-	r.GET("/api/todos", func (c *gin.Context) {
-		c.JSON(200, todoList)
-	})
-
-
-	r.POST("/api/todo", func (c *gin.Context){
-		todo := Todo{}
-		if err := c.ShouldBindJSON(&todo); err != nil {
-			c.JSON(400, gin.H{
-				"message": "Invalid",
-			})
-			return;
-		}
-
-		if todo.Message == "" {
-			c.JSON(400, gin.H{
-				"message": "Body is Required",
-			})
-			return;
-		}
-		todo.ID = len(todoList) + 1;
-
-		//一定要返回接收值，原因是當slice容量不構，記憶體會分配更大的cap，再把舊/新資料搬過去，然後返回新slice
-		todoList = append(todoList, todo);
-
-		c.JSON(200, todo)
-	})
-
-	r.PATCH("/api/todo/:id", func(c *gin.Context) {
-		id := c.Param("id");
-
-		for i, todo := range todoList {
-			if fmt.Sprint(todo.ID) == id {
-				todoList[i].Completed = true;
-				c.JSON(200, todo);
-				return;
-			}
-		}
-
-		c.JSON(404, gin.H{
-			"message": "Not found.",
-		})
-	})
-
-	r.DELETE("/api/todo/:id", func(c *gin.Context) {
-		id := c.Param("id");
-		for i, todo := range todoList {
-			if(fmt.Sprint(todo.ID) == id) {
-				todoList = append(todoList[:i], todoList[(i+1):]...)
-				c.JSON(200, gin.H{
-					"message": "Success",
-				})
-				return;
-			}
-		}
-
-		c.JSON(404, gin.H{
-			"message": "Not found.",
-		})
-	})
-
-	r.Run(":" + port)
+	r.Run(":" + port);
 }
