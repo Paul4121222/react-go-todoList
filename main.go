@@ -1,6 +1,7 @@
 package main
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/gin-contrib/cors"
 	"fmt"
 	"github.com/joho/godotenv"
 	"os"
@@ -122,10 +123,16 @@ func handleDeleteTodo(c *gin.Context) {
  	c.JSON(200, result);
 }
 func main() {
-	if err := godotenv.Load(); err != nil {
-		fmt.Println("Not load .env file.");
-		return;
+	env := os.Getenv("ENV");
+
+	//生產環境下不須加載env
+	if env != "production" {
+		if err := godotenv.Load(); err != nil {
+				fmt.Println("Not load .env file.");
+				return;
+		}
 	}
+	
 
 	port := os.Getenv("PORT");
 	mongodbURI := os.Getenv("MONGO_URI");
@@ -144,11 +151,23 @@ func main() {
 	defer client.Disconnect(context.Background());
 	fmt.Println("成功連線到mongoDB");
 	collection = client.Database("go-react").Collection("todos");
+
 	r := gin.Default();
+
+	if env == "production" {
+		r.Static("/", "./client/dist")
+	} else {
+		//允許跨域
+		r.Use(cors.Default());
+	}
+	
 	r.GET("/api/todos", handleGetTodos);
 	r.POST("/api/todo", handleAddTodo);
 	r.PATCH("/api/todo/:id", handleUpdateTodo);
 	r.DELETE("/api/todo/:id", handleDeleteTodo);
+	r.NoRoute(func (c *gin.Context) {
+		c.File("./client/dist/index.html")
+	})
 
 	r.Run(":" + port);
 }

@@ -1,0 +1,53 @@
+/* ToDoList App 樣式 */
+.todo-app {
+  max-width: 400px;
+  margin: 40px auto;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+  padding: 32px 24px 24px 24px;
+  font-family: 'Segoe UI', 'Arial', sans-serif;
+}
+.todo-app h1 {
+  text-align: center;
+  margin-bottom: 24px;
+  color: #333;
+}
+.todo-app input[type="text"] {
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 16px;
+  outline: none;
+  transition: border 0.2s;
+}
+.todo-app input[type="text"]:focus {
+  border: 1.5px solid #0078d4;
+}
+.todo-app button {
+  border-radius: 6px;
+  border: none;
+  background: #0078d4;
+  color: #fff;
+  font-size: 18px;
+  transition: background 0.2s;
+}
+.todo-app button:hover {
+  background: #005fa3;
+}
+.todo-app ul {
+  margin: 0;
+  padding: 0;
+}
+.todo-app li {
+  background: #f7f7f7;
+  border-radius: 6px;
+  padding: 8px 12px;
+  transition: background 0.2s;
+}
+.todo-app li:hover {
+  background: #e6f0fa;
+}
+.todo-app .done {
+  color: #aaa;
+  text-decoration: line-through;
+}
