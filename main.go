@@ -161,7 +161,8 @@ func main() {
 
 	
 	if env == "production" {
-		r.Static("/static", "./client/dist");
+		//vite 會將靜態資源打包在/assets目錄下
+		r.Static("/assets", "./client/dist/assets");
 		r.NoRoute(func (c *gin.Context) {
 		c.File("./client/dist/index.html")
 	})
